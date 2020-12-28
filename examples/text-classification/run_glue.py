@@ -93,7 +93,9 @@ class DataTrainingArguments:
     validation_file: Optional[str] = field(
         default=None, metadata={"help": "A csv or a json file containing the validation data."}
     )
-
+    test_file: Optional[str] = field(
+        default=None, metadata={"help": "A csv or a json file containing the testing data."}
+    )
     def __post_init__(self):
         if self.task_name is not None:
             self.task_name = self.task_name.lower()
@@ -197,7 +199,7 @@ def main():
     elif data_args.train_file.endswith(".csv"):
         # Loading a dataset from local csv files
         datasets = load_dataset(
-            "csv", data_files={"train": data_args.train_file, "validation": data_args.validation_file}
+            "csv", data_files={"train": data_args.train_file, "validation": data_args.validation_file, "test": data_args.test_file}
         )
     else:
         # Loading a dataset from local json files
@@ -310,6 +312,8 @@ def main():
     eval_dataset = datasets["validation_matched" if data_args.task_name == "mnli" else "validation"]
     if data_args.task_name is not None:
         test_dataset = datasets["test_matched" if data_args.task_name == "mnli" else "test"]
+        
+    test_dataset = datasets["test"]
 
     # Log a few random samples from the training set:
     for index in random.sample(range(len(train_dataset)), 3):
