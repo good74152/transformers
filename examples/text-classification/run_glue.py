@@ -351,10 +351,6 @@ def main():
         # Data collator will default to DataCollatorWithPadding, so we change it if we already did the padding.
         data_collator=default_data_collator if data_args.pad_to_max_length else None,
     )
-    
-    best_run = trainer.hyperparameter_search(n_trials=10, direction="maximize")
-    for n, v in best_run.hyperparameters.items():
-        setattr(trainer.args, n, v)
 
     # Training
     if training_args.do_train:
