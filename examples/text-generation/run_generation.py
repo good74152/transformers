@@ -89,7 +89,7 @@ def prepare_ctrl_input(args, _, tokenizer, prompt_text):
     if args.temperature > 0.7:
         logger.info("CTRL typically works better with lower temperatures (and lower top_k).")
 
-    encoded_prompt = tokenizer.encode(prompt_text, add_special_tokens=False)
+    encoded_prompt = tokenizer.encode(prompt_text, add_special_tokens=True, return_tensors="pt")
     if not any(encoded_prompt[0] == x for x in tokenizer.control_codes.values()):
         logger.info("WARNING! You are not starting your generation from a control code so you won't get good results")
     return prompt_text
@@ -168,7 +168,8 @@ def main():
         help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(MODEL_CLASSES.keys()),
     )
 
-    parser.add_argument("--prompt", type=str, default="")
+    #parser.add_argument("--prompt", type=str, default="")
+    parser.add_argument("--input_file", type=str, default=None)
     parser.add_argument("--length", type=int, default=20)
     parser.add_argument("--stop_token", type=str, default=None, help="Token at which text generation is stopped")
 
@@ -227,68 +228,74 @@ def main():
     args.length = adjust_length_to_model(args.length, max_sequence_length=model.config.max_position_embeddings)
     logger.info(args)
 
-    prompt_text = args.prompt if args.prompt else input("Model prompt >>> ")
+    #prompt_text = args.prompt if args.prompt else input("Model prompt >>> ")
+    
+    with open(args.input_file, "r") as f:
+        for prompt_text in f.readlines():
 
-    # Different models need different input formatting and/or extra arguments
-    requires_preprocessing = args.model_type in PREPROCESSING_FUNCTIONS.keys()
-    if requires_preprocessing:
-        prepare_input = PREPROCESSING_FUNCTIONS.get(args.model_type)
-        preprocessed_prompt_text = prepare_input(args, model, tokenizer, prompt_text)
+            # Different models need different input formatting and/or extra arguments
+            requires_preprocessing = args.model_type in PREPROCESSING_FUNCTIONS.keys()
+            if requires_preprocessing:
+                prepare_input = PREPROCESSING_FUNCTIONS.get(args.model_type)
+                preprocessed_prompt_text = prepare_input(args, model, tokenizer, prompt_text)
 
-        if model.__class__.__name__ in ["TransfoXLLMHeadModel"]:
-            tokenizer_kwargs = {"add_space_before_punct_symbol": True}
-        else:
-            tokenizer_kwargs = {}
+                if model.__class__.__name__ in ["TransfoXLLMHeadModel"]:
+                    tokenizer_kwargs = {"add_space_before_punct_symbol": True}
+                else:
+                    tokenizer_kwargs = {}
 
-        encoded_prompt = tokenizer.encode(
-            preprocessed_prompt_text, add_special_tokens=False, return_tensors="pt", **tokenizer_kwargs
-        )
-    else:
-        prefix = args.prefix if args.prefix else args.padding_text
-        encoded_prompt = tokenizer.encode(prefix + prompt_text, add_special_tokens=False, return_tensors="pt")
-    encoded_prompt = encoded_prompt.to(args.device)
+                encoded_prompt = tokenizer.encode(
+                    preprocessed_prompt_text, add_special_tokens=False, return_tensors="pt", **tokenizer_kwargs
+                )
+            else:
+                prefix = args.prefix if args.prefix else args.padding_text
+                encoded_prompt = tokenizer.encode(prefix + prompt_text, add_special_tokens=False, return_tensors="pt")
+            encoded_prompt = encoded_prompt.to(args.device)
 
-    if encoded_prompt.size()[-1] == 0:
-        input_ids = None
-    else:
-        input_ids = encoded_prompt
+            if encoded_prompt.size()[-1] == 0:
+                input_ids = None
+            else:
+                input_ids = encoded_prompt
 
-    output_sequences = model.generate(
-        input_ids=input_ids,
-        max_length=args.length + len(encoded_prompt[0]),
-        temperature=args.temperature,
-        top_k=args.k,
-        top_p=args.p,
-        repetition_penalty=args.repetition_penalty,
-        do_sample=True,
-        num_return_sequences=args.num_return_sequences,
-    )
+            output_sequences = model.generate(
+                input_ids=input_ids,
+                max_length=args.length + len(encoded_prompt[0]),
+                temperature=args.temperature,
+                top_k=args.k,
+                top_p=args.p,
+                repetition_penalty=args.repetition_penalty,
+                do_sample=True,
+                num_return_sequences=args.num_return_sequences,
+            )
 
-    # Remove the batch dimension when returning multiple sequences
-    if len(output_sequences.shape) > 2:
-        output_sequences.squeeze_()
+            # Remove the batch dimension when returning multiple sequences
+            if len(output_sequences.shape) > 2:
+                output_sequences.squeeze_()
 
-    generated_sequences = []
+            generated_sequences = []
 
-    for generated_sequence_idx, generated_sequence in enumerate(output_sequences):
-        print("=== GENERATED SEQUENCE {} ===".format(generated_sequence_idx + 1))
-        generated_sequence = generated_sequence.tolist()
+            for generated_sequence_idx, generated_sequence in enumerate(output_sequences):
+                print("=== GENERATED SEQUENCE {} ===".format(generated_sequence_idx + 1))
+                generated_sequence = generated_sequence.tolist()
 
-        # Decode text
-        text = tokenizer.decode(generated_sequence, clean_up_tokenization_spaces=True)
+                # Decode text
+                text = tokenizer.decode(generated_sequence, clean_up_tokenization_spaces=True)
 
-        # Remove all text after the stop token
-        text = text[: text.find(args.stop_token) if args.stop_token else None]
+                # Remove all text after the stop token
+                text = text[: text.find(args.stop_token) if args.stop_token else None]
 
-        # Add the prompt at the beginning of the sequence. Remove the excess text that was used for pre-processing
-        total_sequence = (
-            prompt_text + text[len(tokenizer.decode(encoded_prompt[0], clean_up_tokenization_spaces=True)) :]
-        )
+                # Add the prompt at the beginning of the sequence. Remove the excess text that was used for pre-processing
+                total_sequence = (
+                    prompt_text + text[len(tokenizer.decode(encoded_prompt[0], clean_up_tokenization_spaces=True)) :]
+                )
 
-        generated_sequences.append(total_sequence)
-        print(total_sequence)
+                generated_sequences.append(total_sequence)
+                print(total_sequence)
+            
+            with open("gpt2_generate_results.txt", "w") as writer:
+                writer.write("total_sequence\n")
 
-    return generated_sequences
+            #return generated_sequences
 
 
 if __name__ == "__main__":
