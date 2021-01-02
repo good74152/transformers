@@ -231,6 +231,7 @@ def main():
     #prompt_text = args.prompt if args.prompt else input("Model prompt >>> ")
     
     with open(args.input_file, "r") as f:
+        writer = open("gpt2_generate_results.txt", "w")
         for prompt_text in f.readlines():
 
             # Different models need different input formatting and/or extra arguments
@@ -286,13 +287,13 @@ def main():
 
                 # Add the prompt at the beginning of the sequence. Remove the excess text that was used for pre-processing
                 total_sequence = (
-                    prompt_text + text[len(tokenizer.decode(encoded_prompt[0], clean_up_tokenization_spaces=True)) :]
+                    #去除\n
+                    prompt_text[:-1] + text[len(tokenizer.decode(encoded_prompt[0], clean_up_tokenization_spaces=True))+1 :]
                 )
 
                 generated_sequences.append(total_sequence)
                 print(total_sequence)
             
-            with open("gpt2_generate_results.txt", "w") as writer:
                 writer.write("total_sequence\n")
 
             #return generated_sequences
