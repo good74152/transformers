@@ -294,7 +294,7 @@ def main():
                 generated_sequences.append(total_sequence)
                 print(total_sequence)
             
-                writer.write("total_sequence\n")
+                writer.write(total_sequence+"\n")
 
             #return generated_sequences
 
